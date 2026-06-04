@@ -1079,24 +1079,46 @@ async function fetchCloudData() {
   cloudState.isSyncing = true;
   
   try {
-    const res = await fetch(`https://extendsclass.com/api/json-storage/bin/${cloudState.token}`);
-    if (!res.ok) throw new Error('Buluttan veri çekme hatası');
-    const remoteState = await res.json();
+    // Fetch meta to see how many chunks we have
+    const metaRes = await fetch(`https://keyvalue.immanuel.co/api/KeyVal/GetValue/${cloudState.token}/meta`);
+    if (!metaRes.ok) throw new Error('Meta okuma hatası');
+    let metaText = await metaRes.text();
+    metaText = metaText.replace(/^"+|"+$/g, '').trim();
     
-    if (remoteState && JSON.stringify(remoteState) !== JSON.stringify(state)) {
-      state = remoteState;
-      
-      // Tetikleme döngüsünü önlemek için doğrudan localStorage'a yazıyoruz
-      localStorage.setItem('voleybol_players', JSON.stringify(state.players));
-      localStorage.setItem('voleybol_teams', JSON.stringify(state.teams));
-      localStorage.setItem('voleybol_fixtures', JSON.stringify(state.fixtures));
-      
-      renderPlayerPool();
-      renderTeams();
-      renderFixtures();
-      renderStandings();
-      updateDrawSummary();
-      showToast('Veriler buluttan anlık güncellendi!', 'success');
+    if (metaText && metaText !== 'null' && metaText !== '""') {
+      const N = parseInt(metaText);
+      if (N > 0) {
+        // Fetch all chunks in parallel
+        const chunkPromises = [];
+        for (let i = 0; i < N; i++) {
+          chunkPromises.push(
+            fetch(`https://keyvalue.immanuel.co/api/KeyVal/GetValue/${cloudState.token}/chunk_${i}`)
+              .then(r => r.text())
+              .then(t => t.replace(/^"+|"+$/g, '').trim())
+          );
+        }
+        
+        const chunks = await Promise.all(chunkPromises);
+        const fullBase64 = chunks.join('');
+        
+        if (fullBase64) {
+          const remoteState = decodeState(fullBase64);
+          if (remoteState && JSON.stringify(remoteState) !== JSON.stringify(state)) {
+            state = remoteState;
+            
+            localStorage.setItem('voleybol_players', JSON.stringify(state.players));
+            localStorage.setItem('voleybol_teams', JSON.stringify(state.teams));
+            localStorage.setItem('voleybol_fixtures', JSON.stringify(state.fixtures));
+            
+            renderPlayerPool();
+            renderTeams();
+            renderFixtures();
+            renderStandings();
+            updateDrawSummary();
+            showToast('Veriler buluttan anlık güncellendi!', 'success');
+          }
+        }
+      }
     }
   } catch (err) {
     console.error('Bulut çekme hatası:', err);
@@ -1109,15 +1131,28 @@ async function pushDataToCloud() {
   if (!cloudState.token || cloudState.isSyncing) return;
   
   try {
-    const res = await fetch(`https://extendsclass.com/api/json-storage/bin/${cloudState.token}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(state)
+    const base64 = encodeState(state);
+    const chunks = chunkString(base64, 150); // Split base64 into 150-char chunks to stay safe from IIS path limit (200)
+    const N = chunks.length;
+    
+    // Write meta (number of chunks)
+    const metaRes = await fetch(`https://keyvalue.immanuel.co/api/KeyVal/UpdateValue/${cloudState.token}/meta/${N}`, {
+      method: 'POST'
     });
-    if (!res.ok) throw new Error('Buluta yazma hatası');
-    console.log('Bulut senkronizasyonu tamamlandı.');
+    if (!metaRes.ok) throw new Error('Meta yazma hatası');
+    
+    // Write chunks in parallel
+    const chunkPromises = chunks.map((chunk, idx) => {
+      return fetch(`https://keyvalue.immanuel.co/api/KeyVal/UpdateValue/${cloudState.token}/chunk_${idx}/${chunk}`, {
+        method: 'POST'
+      });
+    });
+    
+    const results = await Promise.all(chunkPromises);
+    const failed = results.some(r => !r.ok);
+    if (failed) throw new Error('Chunk yazma hatası');
+    
+    console.log('Bulut senkronizasyonu tamamlandı. Toplam chunk:', N);
   } catch (err) {
     console.error('Bulut gönderme hatası:', err);
     showToast('Bulut senkronizasyonu başarısız oldu!', 'danger');
@@ -1146,6 +1181,15 @@ function decodeState(base64Str) {
     bytes[i] = binary.charCodeAt(i);
   }
   return JSON.parse(new TextDecoder().decode(bytes));
+}
+
+// String'i belirtilen uzunlukta parçalara ayıran yardımcı fonksiyon
+function chunkString(str, length) {
+  const chunks = [];
+  for (let i = 0; i < str.length; i += length) {
+    chunks.push(str.substring(i, i + length));
+  }
+  return chunks;
 }
 
 function startPolling() {
@@ -1202,16 +1246,10 @@ async function startCloudTournament() {
   showToast('Bulut kanalı açılıyor, lütfen bekleyin...', 'info');
   
   try {
-    const res = await fetch('https://extendsclass.com/api/json-storage/bin', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(state)
-    });
+    const res = await fetch('https://keyvalue.immanuel.co/api/KeyVal/GetAppKey');
     if (!res.ok) throw new Error('Anahtar alınamadı');
-    const responseData = await res.json();
-    const token = responseData.id;
+    let token = await res.text();
+    token = token.replace(/^"+|"+$/g, '').trim();
     
     if (token) {
       cloudState.token = token;
@@ -1221,6 +1259,9 @@ async function startCloudTournament() {
       localStorage.setItem('voleybol_cloud_token', token);
       localStorage.setItem('voleybol_sync_mode', 'cloud_owner');
       localStorage.setItem('voleybol_admin_mode', 'true');
+      
+      // Verileri bulut sunucusuna yükle
+      await pushDataToCloud();
       
       startPolling();
       updateSyncBanner();
@@ -1240,7 +1281,7 @@ async function startCloudTournament() {
 async function connectToCloudTournament() {
   const input = document.getElementById('join-code-input');
   const rawCode = input.value.trim().toLowerCase();
-  const code = rawCode.replace(/^"+|"+$/g, '');
+  const code = rawCode.replace(/^"+|"+$/g, '').trim();
   
   if (!code) {
     showToast('Lütfen geçerli bir kod girin!', 'warning');
@@ -1250,14 +1291,42 @@ async function connectToCloudTournament() {
   showToast('Buluta bağlanılıyor...', 'info');
   
   try {
-    const res = await fetch(`https://extendsclass.com/api/json-storage/bin/${code}`);
-    if (!res.ok) throw new Error('Bağlantı hatası');
-    const remoteState = await res.json();
+    // Fetch meta
+    const metaRes = await fetch(`https://keyvalue.immanuel.co/api/KeyVal/GetValue/${code}/meta`);
+    if (!metaRes.ok) throw new Error('Bağlantı hatası');
+    let metaText = await metaRes.text();
+    metaText = metaText.replace(/^"+|"+$/g, '').trim();
     
-    if (!remoteState) {
+    if (!metaText || metaText === 'null' || metaText === '""') {
       showToast('Bu kodda bir turnuva bulunamadı. Lütfen kodu kontrol edin.', 'danger');
       return;
     }
+    
+    const N = parseInt(metaText);
+    if (isNaN(N) || N <= 0) {
+      showToast('Geçersiz turnuva verisi.', 'danger');
+      return;
+    }
+    
+    // Fetch all chunks in parallel
+    const chunkPromises = [];
+    for (let i = 0; i < N; i++) {
+      chunkPromises.push(
+        fetch(`https://keyvalue.immanuel.co/api/KeyVal/GetValue/${code}/chunk_${i}`)
+          .then(r => r.text())
+          .then(t => t.replace(/^"+|"+$/g, '').trim())
+      );
+    }
+    
+    const chunks = await Promise.all(chunkPromises);
+    const fullBase64 = chunks.join('');
+    
+    if (!fullBase64) {
+      showToast('Turnuva verileri indirilemedi.', 'danger');
+      return;
+    }
+    
+    const remoteState = decodeState(fullBase64);
     
     cloudState.token = code;
     cloudState.syncMode = 'cloud_viewer';

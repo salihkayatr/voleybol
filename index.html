@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Şirket İçi Voleybol Turnuvası & Kura Paneli</title>
+  <!-- PWA Manifest & Meta -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0b071e">
+  <!-- Main Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <!-- Header Section -->
+    <header>
+      <div class="logo-section">
+        <span class="logo-icon">🏐</span>
+        <h1>Voleybol Turnuva Paneli</h1>
+      </div>
+      <p class="tagline">Hızlı kura çekimi, takım oluşturma ve lig usulü turnuva takibi</p>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs">
+      <button class="tab-btn active" onclick="switchTab('player-pool-tab')">
+        <span>👤</span> Oyuncu Havuzu
+      </button>
+      <button class="tab-btn" onclick="switchTab('draw-tab')">
+        <span>⚡</span> Kura Çek & Takımlar
+      </button>
+      <button class="tab-btn" onclick="switchTab('fixtures-tab')">
+        <span>📅</span> Maç Fikstürü
+      </button>
+      <button class="tab-btn" onclick="switchTab('standings-tab')">
+        <span>🏆</span> Puan Durumu
+      </button>
+    </nav>
+
+    <!-- Cloud Sync Info Bar / Banner -->
+    <div class="glass-card" id="cloud-sync-banner" style="margin-bottom: 25px; padding: 15px 20px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span id="sync-status-icon" style="font-size: 1.3rem;">📶</span>
+          <div>
+            <div id="sync-status-text" style="font-weight: 700; font-size: 0.95rem;">Yerel Mod (Veriler Cihazınızda)</div>
+            <div id="sync-status-desc" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
+              Diğer oyuncuların telefonlarından canlı takip etmesi için bulut paylaşımını açın.
+            </div>
+          </div>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px;" id="cloud-actions-container">
+          <button class="btn btn-warning btn-sm" onclick="startCloudTournament()">⚡ Paylaşıma Aç (Kod Üret)</button>
+          <button class="btn btn-secondary btn-sm" onclick="toggleJoinPanel()">🔑 Koda Bağlan</button>
+        </div>
+      </div>
+
+      <!-- Join Cloud Panel (Hidden by default) -->
+      <div id="join-cloud-panel" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--glass-border);">
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+          <input type="text" id="join-code-input" placeholder="Turnuva Kodunu Yapıştırın (Örn: x9qfst8w)..." style="padding: 8px 12px; font-size: 0.9rem; flex-grow: 1; max-width: 300px;">
+          <button class="btn btn-sm" onclick="connectToCloudTournament()">Bağlan</button>
+          <button class="btn btn-secondary btn-sm" onclick="toggleJoinPanel()">İptal</button>
+        </div>
+      </div>
+
+      <!-- Share Cloud Panel (Hidden by default, shown in cloud mode) -->
+      <div id="share-cloud-panel" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--glass-border); justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+        <div style="font-size: 0.9rem; display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
+          <span>Turnuva Kodu:</span> <strong id="share-code-display" style="color: var(--accent-secondary); font-size: 1rem; letter-spacing: 1px; margin-right: 5px;">-</strong>
+          <button class="btn btn-secondary btn-sm" style="padding: 4px 10px; font-size: 0.8rem;" onclick="copyShareCode()">Kodu Kopyala</button>
+          <button class="btn btn-secondary btn-sm" style="padding: 4px 10px; font-size: 0.8rem;" onclick="copyShareLink()">Paylaşım Linkini Kopyala 🔗</button>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <label style="font-size: 0.85rem; display: flex; align-items: center; gap: 5px; cursor: pointer; user-select: none;">
+            <input type="checkbox" id="admin-mode-checkbox" onchange="toggleAdminMode(this.checked)" checked>
+            <span>Yönetici Modu (Düzenleme Yetkisi)</span>
+          </label>
+          <button class="btn btn-danger btn-sm" style="padding: 4px 10px; font-size: 0.8rem;" onclick="disconnectCloud()">Buluttan Ayrıl / Yerel Mod</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 1: PLAYER POOL -->
+    <div id="player-pool-tab" class="tab-content active">
+      
+      <!-- Stats Dashboard -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-val primary" id="stat-total-players">0</div>
+          <div class="stat-lbl">Toplam Oyuncu</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="stat-active-players" style="color: var(--accent-success);">0</div>
+          <div class="stat-lbl">Aktif Oynayacak</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="stat-passive-players">0</div>
+          <div class="stat-lbl">Pasif / İzleyici</div>
+        </div>
+      </div>
+
+      <!-- Player Management Card -->
+      <div class="glass-card">
+        <div class="card-title">
+          <span>➕</span> Yeni Oyuncu Ekle
+        </div>
+        
+        <form id="add-player-form" onsubmit="handleAddPlayer(event)">
+          <div class="input-group">
+            <input type="text" id="player-name-input" placeholder="Oyuncu Adı Soyadı..." required autocomplete="off">
+            <button type="submit" class="btn">Ekle</button>
+          </div>
+        </form>
+
+        <div class="action-row">
+          <button class="btn btn-secondary btn-sm" onclick="loadSamplePlayers()">
+            ⚙️ 20 Örnek Oyuncu Yükle
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="setAllPlayersStatus(true)">
+            ✅ Tümünü Aktif Yap
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="setAllPlayersStatus(false)">
+            ❌ Tümünü Pasif Yap
+          </button>
+          <button class="btn btn-danger btn-sm" onclick="clearAllPlayers()">
+            🗑️ Havuzu Sıfırla
+          </button>
+        </div>
+      </div>
+
+      <!-- Player List Card -->
+      <div class="glass-card">
+        <div class="card-title">
+          <span>📋</span> Oyuncu Havuzu Listesi <span class="badge" id="player-count-badge">0 Oyuncu</span>
+        </div>
+        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 15px;">
+          * İsmin üstüne tıklayarak o oyuncunun turnuvada <strong>aktif (oynayacak)</strong> veya <strong>pasif (oynamayacak)</strong> olmasını sağlayabilirsiniz.
+        </p>
+
+        <!-- Empty State -->
+        <div class="empty-state" id="players-empty-state">
+          <div class="empty-state-icon">👥</div>
+          <p>Henüz oyuncu havuzunda kimse yok. Yukarıdan ekleyebilir veya örnek oyuncuları yükleyebilirsiniz.</p>
+        </div>
+
+        <!-- Player Cards Grid -->
+        <div class="player-grid" id="player-list-grid">
+          <!-- Dynamic Player Cards will go here -->
+        </div>
+      </div>
+
+    </div>
+
+    <!-- TAB 2: DRAW & TEAMS -->
+    <div id="draw-tab" class="tab-content">
+      
+      <div class="draw-control-panel">
+        
+        <!-- Draw Setup Card -->
+        <div class="glass-card">
+          <div class="card-title">
+            <span>⚙️</span> Kura Seçenekleri
+          </div>
+          
+          <div class="draw-settings">
+            <div>
+              <label style="display: block; margin-bottom: 8px; font-weight: 500; font-size: 0.95rem;">Kaç Takım Kurulacak?</label>
+              <select id="team-count-select" onchange="updateDrawSummary()">
+                <option value="2">2 Takım</option>
+                <option value="3">3 Takım</option>
+                <option value="4" selected>4 Takım</option>
+                <option value="5">5 Takım</option>
+                <option value="6">6 Takım</option>
+                <option value="8">8 Takım</option>
+              </select>
+            </div>
+
+            <div style="margin-top: 10px;">
+              <button class="btn btn-warning" id="draw-teams-btn" onclick="triggerDraw()" style="width: 100%; font-size: 1.1rem; padding: 14px;">
+                ⚡ Rastgele Kura Çek
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Draw Summary Card -->
+        <div class="glass-card">
+          <div class="card-title">
+            <span>📊</span> Durum Özeti
+          </div>
+          <div class="draw-summary">
+            <div class="draw-summary-item">
+              <span>Toplam Aktif Oyuncu:</span>
+              <span class="value" id="summary-active-count">0</span>
+            </div>
+            <div class="draw-summary-item">
+              <span>Kurulacak Takım Sayısı:</span>
+              <span class="value" id="summary-team-count">4</span>
+            </div>
+            <div class="draw-summary-item">
+              <span>Takım Başına Dağılım:</span>
+              <span class="value" id="summary-distribution">-</span>
+            </div>
+            <p style="margin-top: 15px; font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">
+              * Tüm aktif oyuncular takımlara eşit şekilde dağıtılır. Eğer oyuncu sayısı takım sayısına tam bölünmezse, bazı takımlar 1 kişi fazla olur. Herkes takımlarda yer bulur!
+            </p>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Lottery Animation -->
+      <div class="draw-animation-container" id="draw-animation">
+        <span class="anim-ball">🏐</span>
+        <h3 id="draw-anim-title" style="font-weight: 700; margin-bottom: 8px;">Kura Çekiliyor...</h3>
+        <p style="color: var(--text-muted);">Oyuncu havuzu karıştırılıyor ve takımlar oluşturuluyor.</p>
+        <div class="draw-loading-bar">
+          <div class="draw-loading-fill" id="draw-loading-fill"></div>
+        </div>
+      </div>
+
+      <!-- Generated Teams Showcase -->
+      <div class="glass-card" id="teams-result-card" style="display: none;">
+        <div class="card-title" style="justify-content: space-between; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span>🛡️</span> Kurulan Takımlar
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="generateFixturesFromTeams()">
+            📅 Bu Takımlarla Fikstür Oluştur
+          </button>
+        </div>
+
+        <div class="teams-showcase" id="teams-showcase-grid">
+          <!-- Dynamic Team Cards will go here -->
+        </div>
+      </div>
+
+    </div>
+
+    <!-- TAB 3: FIXTURES -->
+    <div id="fixtures-tab" class="tab-content">
+      
+      <div class="glass-card">
+        <div class="fixtures-header">
+          <div class="card-title" style="margin-bottom: 0; border: none; padding-bottom: 0;">
+            <span>📅</span> Turnuva Fikstürü (Lig Usulü)
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <button class="btn btn-secondary btn-sm" id="reset-fixtures-btn" onclick="resetFixtures()" style="display: none;">
+              🔄 Fikstürü Yeniden Oluştur / Sıfırla
+            </button>
+          </div>
+        </div>
+
+        <!-- Empty Fixture State -->
+        <div class="empty-state" id="fixtures-empty-state">
+          <div class="empty-state-icon">📅</div>
+          <p>Henüz bir fikstür oluşturulmadı. Kura Çek sekmesinden önce takımları oluşturun ve ardından fikstürü üretin.</p>
+        </div>
+
+        <!-- Fixture Match List -->
+        <div class="fixtures-list" id="fixtures-list-container">
+          <!-- Dynamic Match Cards will go here -->
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- TAB 4: STANDINGS -->
+    <div id="standings-tab" class="tab-content">
+      
+      <div class="glass-card">
+        <div class="card-title">
+          <span>🏆</span> Lig Puan Durumu
+        </div>
+
+        <!-- Empty Standings State -->
+        <div class="empty-state" id="standings-empty-state">
+          <div class="empty-state-icon">🏆</div>
+          <p>Maçlar oynanıp skorlar girildikçe puan durumu tablosu burada şekillenecektir.</p>
+        </div>
+
+        <!-- Standings Table -->
+        <div class="table-container" id="standings-table-container" style="display: none;">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 50px; text-align: center;">Sıra</th>
+                <th>Takım</th>
+                <th class="stat-col" style="width: 60px;">M</th>
+                <th class="stat-col" style="width: 60px;">G</th>
+                <th class="stat-col" style="width: 60px;">B</th>
+                <th class="stat-col" style="width: 80px;">Set Av.</th>
+                <th class="stat-col" style="width: 80px;">Sayı Av.</th>
+                <th class="stat-colPoints" style="width: 80px; text-align: center;">Puan</th>
+              </tr>
+            </thead>
+            <tbody id="standings-table-body">
+              <!-- Dynamic Rows will go here -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- SCORE ENTRY MODAL -->
+  <div class="modal-overlay" id="score-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 style="font-weight: 700; color: #fff;">Maç Skoru Gir</h3>
+        <button class="modal-close" onclick="closeScoreModal()">&times;</button>
+      </div>
+
+      <div class="score-entry-board">
+        <div class="score-entry-header">
+          <div class="score-entry-team-a" id="modal-team-a-name">Takım A</div>
+          <div>VS</div>
+          <div class="score-entry-team-b" id="modal-team-b-name">Takım B</div>
+        </div>
+
+        <div style="font-size: 0.85rem; color: var(--text-muted); text-align: center; margin-top: -10px; margin-bottom: 10px;">
+          * Setleri kazanmak için en az 25 sayıya ulaşılmalı ve en az 2 fark olmalıdır. (Karar seti ise 15 sayı)
+        </div>
+
+        <div class="set-score-inputs">
+          <!-- Set 1 -->
+          <div class="set-row">
+            <span class="set-label">1. Set</span>
+            <input type="number" id="set1-a" min="0" placeholder="0">
+            <span class="set-divider">-</span>
+            <input type="number" id="set1-b" min="0" placeholder="0">
+          </div>
+          <!-- Set 2 -->
+          <div class="set-row">
+            <span class="set-label">2. Set</span>
+            <input type="number" id="set2-a" min="0" placeholder="0">
+            <span class="set-divider">-</span>
+            <input type="number" id="set2-b" min="0" placeholder="0">
+          </div>
+          <!-- Set 3 (Decider Set) -->
+          <div class="set-row">
+            <span class="set-label">3. Set</span>
+            <input type="number" id="set3-a" min="0" placeholder="0">
+            <span class="set-divider">-</span>
+            <input type="number" id="set3-b" min="0" placeholder="0">
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeScoreModal()">İptal</button>
+        <button class="btn btn-warning" onclick="saveMatchScore()">Skoru Kaydet</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION CONTAINER -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Application Logic JS -->
+  <script src="app.js"></script>
+</body>
+</html>

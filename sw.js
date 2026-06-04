@@ -1,11 +1,13 @@
-const CACHE_NAME = 'voleybol-panel-v1';
+const CACHE_NAME = 'voleybol-panel-v2';
 const ASSETS = [
   './',
   './index.html',
   './style.css',
   './app.js',
   './icon.svg',
-  './manifest.json'
+  './manifest.json',
+  './logo.png',
+  './background.jpg'
 ];
 
 // Install Event - Pre-cache Assets

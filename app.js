@@ -447,7 +447,11 @@ function renderTeams() {
     const header = document.createElement('div');
     header.className = 'team-card-header';
     header.innerHTML = `
-      <div class="team-name">🛡️ ${team.name}</div>
+      <div class="team-name" style="display: flex; align-items: center; gap: 8px;">
+        <span>🛡️</span>
+        <span>${team.name}</span>
+        ${cloudState.adminMode ? `<button class="btn-edit-name" title="Takımı Yeniden Adlandır" onclick="renameTeam('${team.id}')">✏️</button>` : ''}
+      </div>
       <div class="team-size-badge">${team.players.length} Oyuncu</div>
     `;
     card.appendChild(header);
@@ -476,6 +480,27 @@ function renderTeams() {
   });
   
   resultCard.scrollIntoView({ behavior: 'smooth' });
+}
+
+function renameTeam(teamId) {
+  const team = state.teams.find(t => t.id === teamId);
+  if (!team) return;
+  const newName = prompt("Yeni takım adı girin:", team.name);
+  if (newName && newName.trim()) {
+    team.name = newName.trim();
+    
+    // Ayrıca bu takımın adını fikstür maçlarında da güncelleyelim!
+    state.fixtures.forEach(match => {
+      if (match.teamAId === teamId) match.teamAName = team.name;
+      if (match.teamBId === teamId) match.teamBName = team.name;
+    });
+    
+    saveToLocalStorage();
+    renderTeams();
+    renderFixtures();
+    renderStandings();
+    showToast("Takım adı güncellendi.", "success");
+  }
 }
 
 // --- TAB 3: FIXTURES LOGIC (ROUND ROBIN) ---
@@ -1013,6 +1038,9 @@ function registerServiceWorker() {
 }
 
 async function initializeSyncState() {
+  // Her zaman ilk olarak cihazdaki son durum verisini yüklüyoruz
+  loadFromLocalStorage();
+
   const urlParams = new URLSearchParams(window.location.search);
   const tokenParam = urlParams.get('t');
   
@@ -1043,8 +1071,6 @@ async function initializeSyncState() {
     
     await fetchCloudData();
     startPolling();
-  } else {
-    loadFromLocalStorage();
   }
 }
 

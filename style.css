@@ -39,9 +39,11 @@
 body {
   background-color: var(--bg-primary);
   background-image: 
-    radial-gradient(circle at 10% 20%, rgba(139, 92, 246, 0.15) 0%, transparent 40%),
-    radial-gradient(circle at 90% 80%, rgba(245, 158, 11, 0.1) 0%, transparent 40%),
-    radial-gradient(circle at 50% 50%, rgba(19, 12, 44, 1) 0%, #0b071e 100%);
+    linear-gradient(rgba(11, 7, 30, 0.85), rgba(11, 7, 30, 0.93)),
+    url('background.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   background-attachment: fixed;
   color: var(--text-main);
   min-height: 100vh;
@@ -1022,4 +1024,23 @@ td.points-col {
     width: 100%;
     text-align: center;
   }
+}
+
+.btn-edit-name {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  opacity: 0.5;
+  transition: opacity var(--transition-fast), color var(--transition-fast);
+  padding: 2px 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-edit-name:hover {
+  opacity: 1;
+  color: var(--accent-secondary);
 }

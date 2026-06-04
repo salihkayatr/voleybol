@@ -1079,32 +1079,24 @@ async function fetchCloudData() {
   cloudState.isSyncing = true;
   
   try {
-    const res = await fetch(`https://keyvalue.immanuel.co/api/KeyVal/GetValue/${cloudState.token}/state`);
+    const res = await fetch(`https://extendsclass.com/api/json-storage/bin/${cloudState.token}`);
     if (!res.ok) throw new Error('Buluttan veri çekme hatası');
-    const rawVal = await res.text();
+    const remoteState = await res.json();
     
-    if (rawVal && rawVal !== '""' && rawVal !== 'null') {
-      let base64 = rawVal;
-      if (base64.startsWith('"') && base64.endsWith('"')) {
-        base64 = base64.slice(1, -1);
-      }
+    if (remoteState && JSON.stringify(remoteState) !== JSON.stringify(state)) {
+      state = remoteState;
       
-      const remoteState = decodeState(base64);
-      if (remoteState && JSON.stringify(remoteState) !== JSON.stringify(state)) {
-        state = remoteState;
-        
-        // Tetikleme döngüsünü önlemek için doğrudan localStorage'a yazıyoruz
-        localStorage.setItem('voleybol_players', JSON.stringify(state.players));
-        localStorage.setItem('voleybol_teams', JSON.stringify(state.teams));
-        localStorage.setItem('voleybol_fixtures', JSON.stringify(state.fixtures));
-        
-        renderPlayerPool();
-        renderTeams();
-        renderFixtures();
-        renderStandings();
-        updateDrawSummary();
-        showToast('Veriler buluttan anlık güncellendi!', 'success');
-      }
+      // Tetikleme döngüsünü önlemek için doğrudan localStorage'a yazıyoruz
+      localStorage.setItem('voleybol_players', JSON.stringify(state.players));
+      localStorage.setItem('voleybol_teams', JSON.stringify(state.teams));
+      localStorage.setItem('voleybol_fixtures', JSON.stringify(state.fixtures));
+      
+      renderPlayerPool();
+      renderTeams();
+      renderFixtures();
+      renderStandings();
+      updateDrawSummary();
+      showToast('Veriler buluttan anlık güncellendi!', 'success');
     }
   } catch (err) {
     console.error('Bulut çekme hatası:', err);
@@ -1117,9 +1109,12 @@ async function pushDataToCloud() {
   if (!cloudState.token || cloudState.isSyncing) return;
   
   try {
-    const base64 = encodeState(state);
-    const res = await fetch(`https://keyvalue.immanuel.co/api/KeyVal/UpdateValue/${cloudState.token}/state/${base64}`, {
-      method: 'POST'
+    const res = await fetch(`https://extendsclass.com/api/json-storage/bin/${cloudState.token}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(state)
     });
     if (!res.ok) throw new Error('Buluta yazma hatası');
     console.log('Bulut senkronizasyonu tamamlandı.');
@@ -1207,10 +1202,16 @@ async function startCloudTournament() {
   showToast('Bulut kanalı açılıyor, lütfen bekleyin...', 'info');
   
   try {
-    const res = await fetch('https://keyvalue.immanuel.co/api/KeyVal/GetAppKey');
+    const res = await fetch('https://extendsclass.com/api/json-storage/bin', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(state)
+    });
     if (!res.ok) throw new Error('Anahtar alınamadı');
-    let token = await res.text();
-    token = token.replace(/^"+|"+$/g, '');
+    const responseData = await res.json();
+    const token = responseData.id;
     
     if (token) {
       cloudState.token = token;
@@ -1221,7 +1222,6 @@ async function startCloudTournament() {
       localStorage.setItem('voleybol_sync_mode', 'cloud_owner');
       localStorage.setItem('voleybol_admin_mode', 'true');
       
-      await pushDataToCloud();
       startPolling();
       updateSyncBanner();
       updateAdminUI();
@@ -1250,11 +1250,11 @@ async function connectToCloudTournament() {
   showToast('Buluta bağlanılıyor...', 'info');
   
   try {
-    const res = await fetch(`https://keyvalue.immanuel.co/api/KeyVal/GetValue/${code}/state`);
+    const res = await fetch(`https://extendsclass.com/api/json-storage/bin/${code}`);
     if (!res.ok) throw new Error('Bağlantı hatası');
-    const val = await res.text();
+    const remoteState = await res.json();
     
-    if (!val || val === '""' || val === 'null') {
+    if (!remoteState) {
       showToast('Bu kodda bir turnuva bulunamadı. Lütfen kodu kontrol edin.', 'danger');
       return;
     }
@@ -1268,12 +1268,7 @@ async function connectToCloudTournament() {
     localStorage.setItem('voleybol_admin_mode', 'false');
     
     input.value = '';
-    
-    let base64 = val;
-    if (base64.startsWith('"') && base64.endsWith('"')) {
-      base64 = base64.slice(1, -1);
-    }
-    state = decodeState(base64);
+    state = remoteState;
     
     localStorage.setItem('voleybol_players', JSON.stringify(state.players));
     localStorage.setItem('voleybol_teams', JSON.stringify(state.teams));

@@ -1017,11 +1017,12 @@ async function initializeSyncState() {
   const tokenParam = urlParams.get('t');
   
   if (tokenParam) {
-    cloudState.token = tokenParam;
+    const cleanToken = tokenParam.replace(/^"+|"+$/g, '');
+    cloudState.token = cleanToken;
     cloudState.syncMode = 'cloud_viewer';
     cloudState.adminMode = false; // İzleyiciler varsayılan olarak salt okunur
     
-    localStorage.setItem('voleybol_cloud_token', tokenParam);
+    localStorage.setItem('voleybol_cloud_token', cleanToken);
     localStorage.setItem('voleybol_sync_mode', 'cloud_viewer');
     localStorage.setItem('voleybol_admin_mode', 'false');
     
@@ -1036,7 +1037,7 @@ async function initializeSyncState() {
   const savedAdminMode = localStorage.getItem('voleybol_admin_mode');
   
   if (savedToken && savedSyncMode) {
-    cloudState.token = savedToken;
+    cloudState.token = savedToken.replace(/^"+|"+$/g, '');
     cloudState.syncMode = savedSyncMode;
     cloudState.adminMode = savedAdminMode === 'true';
     
@@ -1182,7 +1183,8 @@ async function startCloudTournament() {
   try {
     const res = await fetch('https://keyvalue.immanuel.co/api/KeyVal/GetAppKey');
     if (!res.ok) throw new Error('Anahtar alınamadı');
-    const token = await res.text();
+    let token = await res.text();
+    token = token.replace(/^"+|"+$/g, '');
     
     if (token) {
       cloudState.token = token;
@@ -1211,7 +1213,8 @@ async function startCloudTournament() {
 
 async function connectToCloudTournament() {
   const input = document.getElementById('join-code-input');
-  const code = input.value.trim().toLowerCase();
+  const rawCode = input.value.trim().toLowerCase();
+  const code = rawCode.replace(/^"+|"+$/g, '');
   
   if (!code) {
     showToast('Lütfen geçerli bir kod girin!', 'warning');

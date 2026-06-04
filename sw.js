@@ -1,4 +1,4 @@
-const CACHE_NAME = 'voleybol-panel-v2';
+const CACHE_NAME = 'voleybol-panel-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -41,7 +41,7 @@ self.addEventListener('activate', (e) => {
 // Fetch Event - Cache First, fallback to Network
 self.addEventListener('fetch', (e) => {
   // Do not intercept cloud database API calls, let them fetch live data!
-  if (e.request.url.includes('immanuel.co') || e.request.url.includes('api')) {
+  if (e.request.url.includes('immanuel.co') || e.request.url.includes('extendsclass') || e.request.url.includes('api')) {
     return;
   }
   

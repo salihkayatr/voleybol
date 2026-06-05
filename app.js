@@ -15,7 +15,9 @@ let cloudState = {
   syncMode: 'local',    // 'local' | 'cloud_owner' | 'cloud_viewer'
   adminMode: true,      // If false, editor views are disabled
   pollInterval: null,   // Timer for pulling data
-  isSyncing: false      // Semaphore to prevent double syncs
+  isSyncing: false,     // Semaphore for pulling (pull lock)
+  isPushing: false,     // Semaphore for pushing (push lock)
+  lastWriteTime: 0      // Timestamp of the last local write
 };
 
 // Available Team Names list for kura draw
@@ -95,6 +97,7 @@ function saveToLocalStorage() {
   
   // Bulut senkronizasyonu aktifse ve düzenleme yetkisi varsa buluta yükle
   if (cloudState.syncMode !== 'local' && cloudState.adminMode) {
+    cloudState.lastWriteTime = Date.now();
     pushDataToCloud();
   }
 }
@@ -1075,7 +1078,14 @@ async function initializeSyncState() {
 }
 
 async function fetchCloudData() {
-  if (!cloudState.token) return;
+  if (!cloudState.token || cloudState.isSyncing) return;
+  
+  // Son 5 saniye içinde yerel değişiklik yapıldıysa uzak veriyi çekme
+  if (Date.now() - cloudState.lastWriteTime < 5000) {
+    console.log('Son yerel değişiklik algılandı, veri çekme atlanıyor.');
+    return;
+  }
+  
   cloudState.isSyncing = true;
   
   try {
@@ -1084,6 +1094,12 @@ async function fetchCloudData() {
     if (!metaRes.ok) throw new Error('Meta okuma hatası');
     let metaText = await metaRes.text();
     metaText = metaText.replace(/^"+|"+$/g, '').trim();
+    
+    // Ağ isteği sürerken yerel değişiklik yapıldıysa işlemi iptal et
+    if (Date.now() - cloudState.lastWriteTime < 5000) {
+      console.log('Uzak veri çekilirken yerel değişiklik yapıldı, iptal ediliyor.');
+      return;
+    }
     
     if (metaText && metaText !== 'null' && metaText !== '""') {
       const N = parseInt(metaText);
@@ -1099,6 +1115,13 @@ async function fetchCloudData() {
         }
         
         const chunks = await Promise.all(chunkPromises);
+        
+        // Parçalar çekilirken yerel değişiklik yapıldıysa işlemi iptal et
+        if (Date.now() - cloudState.lastWriteTime < 5000) {
+          console.log('Uzak parçalar çekilirken yerel değişiklik yapıldı, iptal ediliyor.');
+          return;
+        }
+        
         const fullBase64 = chunks.join('');
         
         if (fullBase64) {
@@ -1128,7 +1151,15 @@ async function fetchCloudData() {
 }
 
 async function pushDataToCloud() {
-  if (!cloudState.token || cloudState.isSyncing) return;
+  if (!cloudState.token) return;
+  if (cloudState.isPushing) {
+    // Zaten gönderim yapılıyorsa, 1 saniye sonra tekrar dene
+    setTimeout(pushDataToCloud, 1000);
+    return;
+  }
+  
+  cloudState.isPushing = true;
+  cloudState.lastWriteTime = Date.now();
   
   try {
     const base64 = encodeState(state);
@@ -1156,6 +1187,8 @@ async function pushDataToCloud() {
   } catch (err) {
     console.error('Bulut gönderme hatası:', err);
     showToast('Bulut senkronizasyonu başarısız oldu!', 'danger');
+  } finally {
+    cloudState.isPushing = false;
   }
 }
 
@@ -1389,6 +1422,21 @@ function disconnectCloud() {
 }
 
 function toggleAdminMode(isChecked) {
+  // Eğer kullanıcı izleyici ise ve yönetici modunu açmaya çalışıyorsa şifre sor
+  if (isChecked && cloudState.syncMode === 'cloud_viewer') {
+    const password = prompt("Yönetici yetkisini açmak için şifreyi giriniz:");
+    if (password !== 'savunma') {
+      showToast('Hatalı şifre! Yönetici yetkisi açılamadı.', 'danger');
+      document.getElementById('admin-mode-checkbox').checked = false;
+      cloudState.adminMode = false;
+      localStorage.setItem('voleybol_admin_mode', 'false');
+      updateAdminUI();
+      renderPlayerPool();
+      renderFixtures();
+      return;
+    }
+  }
+  
   cloudState.adminMode = isChecked;
   localStorage.setItem('voleybol_admin_mode', isChecked ? 'true' : 'false');
   updateAdminUI();

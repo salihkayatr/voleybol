@@ -1,4 +1,4 @@
-const CACHE_NAME = 'voleybol-panel-v5';
+const CACHE_NAME = 'voleybol-panel-v6';
 const ASSETS = [
   './',
   './index.html',

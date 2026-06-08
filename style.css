@@ -872,6 +872,8 @@ input[type="text"]:focus, select:focus, input[type="number"]:focus {
 .set-row input[type="number"] {
   text-align: center;
   padding: 8px;
+  width: 100%;
+  min-width: 0;
 }
 
 .set-divider {
@@ -1015,6 +1017,7 @@ td.points-col {
   .match-teams-display {
     flex-direction: column;
     gap: 10px;
+    align-items: center;
   }
   .display-team {
     width: 100%;
@@ -1023,6 +1026,13 @@ td.points-col {
   .match-action-btn {
     width: 100%;
     text-align: center;
+  }
+  .modal-content {
+    padding: 20px 15px;
+  }
+  .set-row {
+    grid-template-columns: 60px 1fr 20px 1fr;
+    gap: 6px;
   }
 }
 

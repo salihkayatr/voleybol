@@ -863,12 +863,12 @@ function openScoreModal(matchId) {
   document.getElementById('modal-team-a-name').innerText = match.teamAName;
   document.getElementById('modal-team-b-name').innerText = match.teamBName;
   
-  // Fill scores (if already entered)
-  document.getElementById('set1-a').value = match.scores.set1[0] !== null ? match.scores.set1[0] : '';
-  document.getElementById('set1-b').value = match.scores.set1[1] !== null ? match.scores.set1[1] : '';
+  // Fill scores (if already entered, show them; if not, prefill with '0' for convenience)
+  document.getElementById('set1-a').value = match.scores.set1[0] !== null ? match.scores.set1[0] : '0';
+  document.getElementById('set1-b').value = match.scores.set1[1] !== null ? match.scores.set1[1] : '0';
   
-  document.getElementById('set2-a').value = match.scores.set2[0] !== null ? match.scores.set2[0] : '';
-  document.getElementById('set2-b').value = match.scores.set2[1] !== null ? match.scores.set2[1] : '';
+  document.getElementById('set2-a').value = match.scores.set2[0] !== null ? match.scores.set2[0] : '0';
+  document.getElementById('set2-b').value = match.scores.set2[1] !== null ? match.scores.set2[1] : '0';
   
   document.getElementById('set3-a').value = match.scores.set3[0] !== null ? match.scores.set3[0] : '';
   document.getElementById('set3-b').value = match.scores.set3[1] !== null ? match.scores.set3[1] : '';
@@ -908,13 +908,16 @@ function checkSetScoresForDecider() {
   const set3A = document.getElementById('set3-a');
   const set3B = document.getElementById('set3-b');
   
-  // If set 1 and set 2 scores are both filled, determine set winners
-  if (s1A_val !== '' && s1B_val !== '' && s2A_val !== '' && s2B_val !== '') {
-    const s1A = parseInt(s1A_val);
-    const s1B = parseInt(s1B_val);
-    const s2A = parseInt(s2A_val);
-    const s2B = parseInt(s2B_val);
-    
+  const s1A = s1A_val === '' ? 0 : parseInt(s1A_val);
+  const s1B = s1B_val === '' ? 0 : parseInt(s1B_val);
+  const s2A = s2A_val === '' ? 0 : parseInt(s2A_val);
+  const s2B = s2B_val === '' ? 0 : parseInt(s2B_val);
+  
+  // A set is entered if one of the scores is > 0
+  const isSet1Entered = s1A > 0 || s1B > 0;
+  const isSet2Entered = s2A > 0 || s2B > 0;
+  
+  if (isSet1Entered && isSet2Entered) {
     let winner1 = s1A > s1B ? 'A' : 'B';
     let winner2 = s2A > s2B ? 'A' : 'B';
     
@@ -930,6 +933,8 @@ function checkSetScoresForDecider() {
       // 1-1 split! Enable Set 3
       set3A.disabled = false;
       set3B.disabled = false;
+      if (set3A.value === '') set3A.value = '0';
+      if (set3B.value === '') set3B.value = '0';
       set3A.placeholder = '0';
       set3B.placeholder = '0';
     }
@@ -937,6 +942,8 @@ function checkSetScoresForDecider() {
     // Scores not fully entered yet. Disable Set 3 by default
     set3A.disabled = true;
     set3B.disabled = true;
+    set3A.value = '';
+    set3B.value = '';
     set3A.placeholder = 'Önce 1 ve 2. Seti girin';
     set3B.placeholder = 'Önce 1 ve 2. Seti girin';
   }
@@ -958,16 +965,18 @@ function saveMatchScore() {
   const s3A_val = document.getElementById('set3-a').value;
   const s3B_val = document.getElementById('set3-b').value;
   
-  // Basic validation: Set 1 and 2 are mandatory
-  if (s1A_val === '' || s1B_val === '' || s2A_val === '' || s2B_val === '') {
-    showToast('Lütfen en azından 1. ve 2. Set sonuçlarını giriniz!', 'danger');
+  const parseScore = (val) => (val === '' ? 0 : parseInt(val));
+  
+  const s1A = parseScore(s1A_val);
+  const s1B = parseScore(s1B_val);
+  const s2A = parseScore(s2A_val);
+  const s2B = parseScore(s2B_val);
+  
+  // Validation: at least one score in Set 1 and Set 2 must be entered (both shouldn't be 0)
+  if ((s1A === 0 && s1B === 0) || (s2A === 0 && s2B === 0)) {
+    showToast('Lütfen 1. ve 2. Set sonuçlarını giriniz!', 'danger');
     return;
   }
-  
-  const s1A = parseInt(s1A_val);
-  const s1B = parseInt(s1B_val);
-  const s2A = parseInt(s2A_val);
-  const s2B = parseInt(s2B_val);
   
   if (s1A === s1B || s2A === s2B) {
     showToast('Bir set beraberlikle bitemez!', 'danger');
@@ -992,13 +1001,13 @@ function saveMatchScore() {
     finalWinnerId = state.fixtures.find(m => m.id === state.currentEditingMatchId).teamBId;
   } else {
     // 1-1 Draw. Set 3 is required
-    if (s3A_val === '' || s3B_val === '') {
+    if (s3A_val === '' && s3B_val === '') {
       showToast('Setlerde durum 1-1! 3. Set sonucunu girmelisiniz.', 'danger');
       return;
     }
     
-    set3A = parseInt(s3A_val);
-    set3B = parseInt(s3B_val);
+    set3A = parseScore(s3A_val);
+    set3B = parseScore(s3B_val);
     
     if (set3A === set3B) {
       showToast('3. Set (Karar Seti) beraberlikle bitemez!', 'danger');
